@@ -10,8 +10,10 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Board } from './src/components/Board';
 import { Keyboard } from './src/components/Keyboard';
-import { useWortFindung, Language } from './src/hooks/useWortFindung';
+import { useWortFindung, Language, WordLength } from './src/hooks/useWortFindung';
 import { COLORS } from './src/styles/theme';
+
+const WORD_LENGTHS: WordLength[] = [4, 5, 6, 7, 8];
 
 function useWebSetup() {
   useEffect(() => {
@@ -50,7 +52,8 @@ function useWebSetup() {
 
 export default function App() {
   const [language, setLanguage] = useState<Language>('de');
-  const game = useWortFindung(language);
+  const [wordLength, setWordLength] = useState<WordLength>(5);
+  const game = useWortFindung(language, wordLength);
   const { width } = useWindowDimensions();
   const isNarrow = width < 400;
 
@@ -116,6 +119,20 @@ export default function App() {
 
       <View style={styles.divider} />
 
+      <View style={styles.lengthBar}>
+        {WORD_LENGTHS.map((len) => (
+          <Pressable
+            key={len}
+            onPress={() => setWordLength(len)}
+            style={[styles.lengthBtn, wordLength === len && styles.lengthBtnActive]}
+          >
+            <Text style={[styles.lengthText, wordLength === len && styles.lengthTextActive]}>
+              {len}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
       {game.message ? (
         <View style={styles.messageBanner}>
           <Text style={styles.messageText}>{game.message}</Text>
@@ -130,6 +147,8 @@ export default function App() {
           currentRow={game.currentRow}
           shake={game.shake}
           revealRow={game.revealRow}
+          rows={game.rows}
+          cols={game.cols}
         />
 
         <View style={styles.bottom}>
@@ -169,6 +188,31 @@ const styles = StyleSheet.create({
   titleSmall: {
     fontSize: 22,
     letterSpacing: 0.5,
+  },
+  lengthBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  lengthBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.headerBorder,
+  },
+  lengthBtnActive: {
+    backgroundColor: COLORS.correct,
+    borderColor: COLORS.correct,
+  },
+  lengthText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  lengthTextActive: {
+    color: COLORS.white,
   },
   langSwitch: {
     flexDirection: 'row',

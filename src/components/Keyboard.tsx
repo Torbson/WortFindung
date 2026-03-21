@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { COLORS, KEYBOARD_LAYOUTS } from '../styles/theme';
-import type { Language, LetterStatus } from '../hooks/useWordle';
+import type { Language, LetterStatus } from '../hooks/useWortFindung';
 
 interface KeyboardProps {
   onKeyPress: (letter: string) => void;

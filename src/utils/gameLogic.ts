@@ -1,11 +1,12 @@
 export type TileStatus = 'correct' | 'present' | 'absent' | 'empty' | 'tbd';
 
 export function evaluateGuess(guess: string, solution: string): TileStatus[] {
-  const result: TileStatus[] = Array(5).fill('absent');
+  const len = solution.length;
+  const result: TileStatus[] = Array(len).fill('absent');
   const solutionChars = solution.split('');
   const guessChars = guess.split('');
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < len; i++) {
     if (guessChars[i] === solutionChars[i]) {
       result[i] = 'correct';
       solutionChars[i] = '#';
@@ -13,7 +14,7 @@ export function evaluateGuess(guess: string, solution: string): TileStatus[] {
     }
   }
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < len; i++) {
     if (guessChars[i] === '*') continue;
     const idx = solutionChars.indexOf(guessChars[i]);
     if (idx !== -1) {

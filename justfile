@@ -5,7 +5,7 @@ install:
     npm install
 
 start:
-    npx expo start --web --port 8081
+    CI=false npx expo start --web --port 8081
 
 docker-install:
     docker compose build

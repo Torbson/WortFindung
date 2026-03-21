@@ -10,11 +10,13 @@ interface BoardProps {
   currentRow: number;
   shake: boolean;
   revealRow: number;
+  rows: number;
+  cols: number;
 }
 
-const ROWS = 6;
-const COLS = 5;
-const MAX_TILE = 62;
+const REFERENCE_COLS = 5;
+const REFERENCE_ROWS = 6;
+const REFERENCE_MAX_TILE = 62;
 const TILE_GAP = 5;
 
 export const Board: React.FC<BoardProps> = ({
@@ -23,15 +25,22 @@ export const Board: React.FC<BoardProps> = ({
   currentGuess,
   currentRow,
   shake,
+  rows,
+  cols,
 }) => {
   const { width, height } = useWindowDimensions();
   const shakeAnim = React.useRef(new Animated.Value(0)).current;
 
+  const scaleFactor = Math.sqrt(
+    (REFERENCE_COLS * REFERENCE_ROWS) / (cols * rows),
+  );
+  const maxTile = Math.floor(REFERENCE_MAX_TILE * scaleFactor);
+
   const boardPad = 16;
-  const maxByWidth = (width - boardPad * 2 - TILE_GAP * (COLS - 1)) / COLS;
+  const maxByWidth = (width - boardPad * 2 - TILE_GAP * (cols - 1)) / cols;
   const headerAndKeyboard = 280;
-  const maxByHeight = (height - headerAndKeyboard - TILE_GAP * (ROWS - 1)) / ROWS;
-  const tileSize = Math.min(MAX_TILE, maxByWidth, maxByHeight);
+  const maxByHeight = (height - headerAndKeyboard - TILE_GAP * (rows - 1)) / rows;
+  const tileSize = Math.min(maxTile, maxByWidth, maxByHeight);
 
   React.useEffect(() => {
     if (shake) {
@@ -51,7 +60,7 @@ export const Board: React.FC<BoardProps> = ({
     const isGuessedRow = rowIndex < guesses.length;
 
     const tiles = [];
-    for (let col = 0; col < COLS; col++) {
+    for (let col = 0; col < cols; col++) {
       let letter = '';
       let status: TileStatus = 'empty';
       let pop = false;
@@ -95,7 +104,7 @@ export const Board: React.FC<BoardProps> = ({
 
   return (
     <View style={styles.board}>
-      {Array.from({ length: ROWS }, (_, i) => renderRow(i))}
+      {Array.from({ length: rows }, (_, i) => renderRow(i))}
     </View>
   );
 };
