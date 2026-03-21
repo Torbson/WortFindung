@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "WortFindung",
+    "slug": "WortFindung",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#121213"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "experiments": {
+      "baseUrl": "/WortFindung"
+    },
+    "platforms": ["web"]
+  }
+}
