@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { evaluateGuess, TileStatus } from '../utils/gameLogic';
-import { WORDS_DE } from '../data/wordsDE';
-import { WORDS_EN } from '../data/wordsEN';
+import { SOLUTIONS_DE, VALID_DE } from '../data/wordsDE';
+import { SOLUTIONS_EN, VALID_EN } from '../data/wordsEN';
 
 export type Language = 'de' | 'en';
 export type WordLength = 4 | 5 | 6 | 7 | 8;
@@ -20,7 +20,9 @@ interface WortFindungState {
   solution: string;
   guesses: string[];
   evaluations: TileStatus[][];
-  currentGuess: string;
+  currentGuess: string[];
+  selectedCell: number;
+  popCell: number;
   currentRow: number;
   gameOver: boolean;
   gameWon: boolean;
@@ -33,13 +35,15 @@ interface WortFindungState {
 const validWordsCache: Record<string, Set<string>> = {};
 
 function getSolutions(lang: Language, wordLength: WordLength): string[] {
-  return (lang === 'de' ? WORDS_DE : WORDS_EN)[wordLength] ?? [];
+  return (lang === 'de' ? SOLUTIONS_DE : SOLUTIONS_EN)[wordLength] ?? [];
 }
 
 function getValidWords(lang: Language, wordLength: WordLength): Set<string> {
   const key = `${lang}${wordLength}`;
   if (!validWordsCache[key]) {
-    validWordsCache[key] = new Set(getSolutions(lang, wordLength));
+    const valid = (lang === 'de' ? VALID_DE : VALID_EN)[wordLength] ?? [];
+    const solutions = getSolutions(lang, wordLength);
+    validWordsCache[key] = new Set([...solutions, ...valid]);
   }
   return validWordsCache[key];
 }
@@ -72,7 +76,7 @@ function storageKey(lang: Language, wordLength: WordLength, dateKey: string): st
 function saveState(lang: Language, wordLength: WordLength, dateKey: string, state: WortFindungState): void {
   if (Platform.OS !== 'web') return;
   try {
-    const { shake, revealRow, message, ...persistable } = state;
+    const { shake, revealRow, message, popCell, ...persistable } = state;
     localStorage.setItem(storageKey(lang, wordLength, dateKey), JSON.stringify(persistable));
   } catch {}
 }
@@ -88,6 +92,27 @@ function loadState(lang: Language, wordLength: WordLength, dateKey: string): Par
   }
 }
 
+function emptyGuess(length: number): string[] {
+  return Array(length).fill('');
+}
+
+function parseCurrentGuess(saved: unknown, wordLength: number): string[] {
+  if (Array.isArray(saved)) {
+    const arr = saved as string[];
+    if (arr.length === wordLength) return arr;
+    return Array.from({ length: wordLength }, (_, i) => arr[i] || '');
+  }
+  if (typeof saved === 'string') {
+    return Array.from({ length: wordLength }, (_, i) => (saved as string)[i] || '');
+  }
+  return emptyGuess(wordLength);
+}
+
+function firstEmptyIndex(guess: string[]): number {
+  const idx = guess.indexOf('');
+  return idx === -1 ? guess.length - 1 : idx;
+}
+
 function createInitialState(lang: Language, wordLength: WordLength): WortFindungState {
   const solutions = getSolutions(lang, wordLength);
   const dateKey = getTodayDateKey();
@@ -95,11 +120,14 @@ function createInitialState(lang: Language, wordLength: WordLength): WortFindung
   const solution = getDailyWord(solutions);
 
   if (saved && saved.solution === solution) {
+    const currentGuess = parseCurrentGuess(saved.currentGuess, wordLength);
     return {
       solution: saved.solution,
       guesses: saved.guesses ?? [],
       evaluations: saved.evaluations ?? [],
-      currentGuess: saved.currentGuess ?? '',
+      currentGuess,
+      selectedCell: firstEmptyIndex(currentGuess),
+      popCell: -1,
       currentRow: saved.currentRow ?? 0,
       gameOver: saved.gameOver ?? false,
       gameWon: saved.gameWon ?? false,
@@ -114,7 +142,9 @@ function createInitialState(lang: Language, wordLength: WordLength): WortFindung
     solution,
     guesses: [],
     evaluations: [],
-    currentGuess: '',
+    currentGuess: emptyGuess(wordLength),
+    selectedCell: 0,
+    popCell: -1,
     currentRow: 0,
     gameOver: false,
     gameWon: false,
@@ -151,36 +181,82 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
 
   const addLetter = useCallback((letter: string) => {
     setState(prev => {
-      if (prev.gameOver || prev.currentGuess.length >= wordLength) return prev;
-      return { ...prev, currentGuess: prev.currentGuess + letter.toUpperCase() };
+      if (prev.gameOver) return prev;
+      const newGuess = [...prev.currentGuess];
+      const cell = prev.selectedCell;
+      newGuess[cell] = letter.toUpperCase();
+
+      let nextCell = cell;
+      for (let i = 1; i <= wordLength; i++) {
+        const idx = (cell + i) % wordLength;
+        if (!newGuess[idx]) {
+          nextCell = idx;
+          break;
+        }
+      }
+      if (newGuess.every(c => c)) {
+        nextCell = Math.min(cell + 1, wordLength - 1);
+      }
+
+      return { ...prev, currentGuess: newGuess, selectedCell: nextCell, popCell: cell };
     });
   }, [wordLength]);
 
   const deleteLetter = useCallback(() => {
     setState(prev => {
       if (prev.gameOver) return prev;
-      return { ...prev, currentGuess: prev.currentGuess.slice(0, -1) };
+      const newGuess = [...prev.currentGuess];
+
+      if (newGuess[prev.selectedCell]) {
+        newGuess[prev.selectedCell] = '';
+        return { ...prev, currentGuess: newGuess, popCell: -1 };
+      }
+
+      for (let i = prev.selectedCell - 1; i >= 0; i--) {
+        if (newGuess[i]) {
+          newGuess[i] = '';
+          return { ...prev, currentGuess: newGuess, selectedCell: i, popCell: -1 };
+        }
+      }
+      return prev;
     });
   }, []);
+
+  const selectCell = useCallback((index: number) => {
+    setState(prev => {
+      if (prev.gameOver || index < 0 || index >= wordLength) return prev;
+      return { ...prev, selectedCell: index };
+    });
+  }, [wordLength]);
+
+  const moveSelection = useCallback((direction: -1 | 1) => {
+    setState(prev => {
+      if (prev.gameOver) return prev;
+      const next = Math.max(0, Math.min(wordLength - 1, prev.selectedCell + direction));
+      return { ...prev, selectedCell: next };
+    });
+  }, [wordLength]);
 
   const submitGuess = useCallback(() => {
     setState(prev => {
       if (prev.gameOver) return prev;
 
-      if (prev.currentGuess.length !== wordLength) {
+      const hasEmpty = prev.currentGuess.some(c => !c);
+      if (hasEmpty) {
         const msg = language === 'de' ? 'Nicht genug Buchstaben' : 'Not enough letters';
         setTimeout(() => flashMessage(msg), 0);
         return { ...prev, shake: true };
       }
 
+      const guessStr = prev.currentGuess.join('');
       const validWords = getValidWords(language, wordLength);
-      if (!validWords.has(prev.currentGuess)) {
+      if (!validWords.has(guessStr)) {
         const msg = language === 'de' ? 'Kein gültiges Wort' : 'Not in word list';
         setTimeout(() => flashMessage(msg), 0);
         return { ...prev, shake: true };
       }
 
-      const evaluation = evaluateGuess(prev.currentGuess, prev.solution);
+      const evaluation = evaluateGuess(guessStr, prev.solution);
       const newLetterStatuses = { ...prev.letterStatuses };
 
       for (let i = 0; i < wordLength; i++) {
@@ -195,7 +271,7 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
         }
       }
 
-      const won = prev.currentGuess === prev.solution;
+      const won = guessStr === prev.solution;
       const isLastRow = prev.currentRow === maxRows - 1;
       const gameOver = won || isLastRow;
 
@@ -211,9 +287,11 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
 
       return {
         ...prev,
-        guesses: [...prev.guesses, prev.currentGuess],
+        guesses: [...prev.guesses, guessStr],
         evaluations: [...prev.evaluations, evaluation],
-        currentGuess: '',
+        currentGuess: emptyGuess(wordLength),
+        selectedCell: 0,
+        popCell: -1,
         currentRow: prev.currentRow + 1,
         gameOver,
         gameWon: won,
@@ -236,6 +314,8 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
     addLetter,
     deleteLetter,
     submitGuess,
+    selectCell,
+    moveSelection,
     rows: maxRows,
     cols: wordLength as number,
   };

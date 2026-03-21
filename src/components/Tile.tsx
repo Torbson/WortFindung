@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Text, StyleSheet, Animated } from 'react-native';
+import { Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { TileStatus } from '../utils/gameLogic';
 import { COLORS } from '../styles/theme';
 
@@ -9,6 +9,8 @@ interface TileProps {
   delay: number;
   pop: boolean;
   size: number;
+  selected?: boolean;
+  onPress?: () => void;
 }
 
 const STATUS_COLORS: Record<TileStatus, string> = {
@@ -19,7 +21,7 @@ const STATUS_COLORS: Record<TileStatus, string> = {
   tbd: 'transparent',
 };
 
-export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size }) => {
+export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, selected, onPress }) => {
   const flipAnim = useRef(new Animated.Value(0)).current;
   const popAnim = useRef(new Animated.Value(1)).current;
   const revealed = useRef(false);
@@ -64,15 +66,15 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size }) 
     ],
   });
 
-  const borderColor = letter
-    ? isRevealed
+  const borderColor = selected
+    ? '#787878'
+    : isRevealed
       ? STATUS_COLORS[status]
-      : COLORS.tileBorderFilled
-    : COLORS.tileBorder;
+      : COLORS.tileBorder;
 
   const fontSize = Math.max(14, size * 0.48);
 
-  return (
+  const tileView = (
     <Animated.View
       style={[
         styles.tile,
@@ -87,11 +89,22 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size }) 
           ],
           backgroundColor: isRevealed ? bgColor as any : 'transparent',
         },
+        selected && styles.selectedTile,
       ]}
     >
       <Text style={[styles.letter, { fontSize }]}>{letter}</Text>
     </Animated.View>
   );
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={styles.pressable}>
+        {tileView}
+      </Pressable>
+    );
+  }
+
+  return tileView;
 };
 
 const styles = StyleSheet.create({
@@ -101,6 +114,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     margin: 2.5,
   },
+  selectedTile: {
+    boxShadow: '0 0 10px rgba(150, 150, 150, 0.7)',
+  } as any,
+  pressable: {
+    outlineStyle: 'none',
+  } as any,
   letter: {
     color: COLORS.tileText,
     fontWeight: '700',

@@ -71,6 +71,12 @@ export default function App() {
       } else if (e.key === 'Backspace') {
         e.preventDefault();
         game.deleteLetter();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        game.moveSelection(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        game.moveSelection(1);
       } else {
         const key = e.key.toUpperCase();
         const validLetters = language === 'de'
@@ -84,7 +90,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [game.submitGuess, game.deleteLetter, game.addLetter, language]);
+  }, [game.submitGuess, game.deleteLetter, game.addLetter, game.moveSelection, language]);
 
   return (
     <View style={styles.container}>
@@ -145,10 +151,13 @@ export default function App() {
           evaluations={game.evaluations}
           currentGuess={game.currentGuess}
           currentRow={game.currentRow}
+          selectedCell={game.selectedCell}
+          popCell={game.popCell}
           shake={game.shake}
           revealRow={game.revealRow}
           rows={game.rows}
           cols={game.cols}
+          onSelectCell={game.selectCell}
         />
 
         <View style={styles.bottom}>

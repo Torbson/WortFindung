@@ -6,12 +6,15 @@ import { TileStatus } from '../utils/gameLogic';
 interface BoardProps {
   guesses: string[];
   evaluations: TileStatus[][];
-  currentGuess: string;
+  currentGuess: string[];
   currentRow: number;
+  selectedCell: number;
+  popCell: number;
   shake: boolean;
   revealRow: number;
   rows: number;
   cols: number;
+  onSelectCell: (index: number) => void;
 }
 
 const REFERENCE_COLS = 5;
@@ -24,9 +27,12 @@ export const Board: React.FC<BoardProps> = ({
   evaluations,
   currentGuess,
   currentRow,
+  selectedCell,
+  popCell,
   shake,
   rows,
   cols,
+  onSelectCell,
 }) => {
   const { width, height } = useWindowDimensions();
   const shakeAnim = React.useRef(new Animated.Value(0)).current;
@@ -64,6 +70,7 @@ export const Board: React.FC<BoardProps> = ({
       let letter = '';
       let status: TileStatus = 'empty';
       let pop = false;
+      let selected = false;
 
       if (isGuessedRow) {
         letter = guesses[rowIndex][col];
@@ -71,7 +78,8 @@ export const Board: React.FC<BoardProps> = ({
       } else if (isCurrentRow) {
         letter = currentGuess[col] || '';
         status = letter ? 'tbd' : 'empty';
-        pop = col === currentGuess.length - 1 && letter !== '';
+        pop = col === popCell;
+        selected = col === selectedCell;
       }
 
       tiles.push(
@@ -82,6 +90,8 @@ export const Board: React.FC<BoardProps> = ({
           delay={col * 300}
           pop={pop}
           size={tileSize}
+          selected={selected}
+          onPress={isCurrentRow ? () => onSelectCell(col) : undefined}
         />,
       );
     }
