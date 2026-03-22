@@ -7,7 +7,7 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#121213"
+      "backgroundColor": "#18181b"
     },
     "web": {
       "bundler": "metro",
@@ -16,6 +16,8 @@
     "experiments": {
       "baseUrl": "/WortFindung"
     },
-    "platforms": ["web"]
+    "platforms": [
+      "web"
+    ]
   }
 }

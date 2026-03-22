@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
-import { COLORS, KEYBOARD_LAYOUTS } from '../styles/theme';
+import { COLORS, TEXT, KEYBOARD_LAYOUTS } from '../styles/theme';
 import type { Language, LetterStatus } from '../hooks/useWortFindung';
 
 interface KeyboardProps {
@@ -31,8 +31,11 @@ export const Keyboard: React.FC<KeyboardProps> = ({
   const maxKeysInRow = Math.max(...layout.map(r => r.length));
   const keyGap = width < 380 ? 3 : 5;
   const baseKeyWidth = (kbWidth - keyGap * (maxKeysInRow + 1)) / maxKeysInRow;
+  /** Breite der breitesten Zeile (alle Tasten gleich breit) – für bündige ENTER/DEL-Zeile */
+  const maxRowContentWidth =
+    maxKeysInRow * baseKeyWidth + (maxKeysInRow - 1) * keyGap;
   const keyHeight = Math.min(58, Math.max(42, baseKeyWidth * 1.6));
-  const fontSize = width < 380 ? 11 : 14;
+  const fontSize = width < 380 ? 13 : 16;
 
   const handlePress = (key: string) => {
     if (key === 'ENTER') {
@@ -46,15 +49,29 @@ export const Keyboard: React.FC<KeyboardProps> = ({
 
   return (
     <View style={[styles.keyboard, { maxWidth: kbWidth }]}>
-      {layout.map((row, rowIndex) => (
+      {layout.map((row, rowIndex) => {
+        const numSpecialInRow = row.filter((k) => k === 'ENTER' || k === 'DEL').length;
+        const numRegularInRow = row.length - numSpecialInRow;
+        const gapsInRow = row.length - 1;
+        const specialKeyWidth =
+          numSpecialInRow > 0
+            ? (maxRowContentWidth -
+                numRegularInRow * baseKeyWidth -
+                gapsInRow * keyGap) /
+              numSpecialInRow
+            : baseKeyWidth;
+
+        return (
         <View key={rowIndex} style={[styles.row, { gap: keyGap }]}>
           {row.map((key) => {
             const isSpecial = key === 'ENTER' || key === 'DEL';
-            const bgColor = !isSpecial && letterStatuses[key]
-              ? STATUS_KEY_COLORS[letterStatuses[key]]
+            const status = !isSpecial ? letterStatuses[key] : undefined;
+            const bgColor = status
+              ? STATUS_KEY_COLORS[status]
               : COLORS.keyBg;
+            const isAbsent = status === 'absent';
 
-            const keyW = isSpecial ? baseKeyWidth * 1.5 : baseKeyWidth;
+            const keyW = isSpecial ? specialKeyWidth : baseKeyWidth;
 
             return (
               <Pressable
@@ -66,18 +83,25 @@ export const Keyboard: React.FC<KeyboardProps> = ({
                     width: keyW,
                     height: keyHeight,
                     backgroundColor: bgColor,
-                    opacity: pressed ? 0.7 : 1,
+                    opacity: pressed ? 0.7 : isAbsent ? 0.72 : 1,
                   },
                 ]}
               >
-                <Text style={[styles.keyText, { fontSize: isSpecial ? fontSize - 2 : fontSize }]}>
+                <Text
+                  style={[
+                    styles.keyText,
+                    { fontSize: isSpecial ? fontSize - 2 : fontSize },
+                    isAbsent && styles.keyTextAbsent,
+                  ]}
+                >
                   {key === 'DEL' ? '⌫' : key}
                 </Text>
               </Pressable>
             );
           })}
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 };
@@ -99,7 +123,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   keyText: {
+    ...TEXT.bold,
     color: COLORS.keyText,
-    fontWeight: '700',
   },
+  keyTextAbsent: {
+    color: COLORS.absentMuted,
+    textDecorationLine: 'line-through',
+    textDecorationColor: COLORS.absentMuted,
+  } as any,
 });

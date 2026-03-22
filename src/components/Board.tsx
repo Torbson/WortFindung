@@ -21,6 +21,8 @@ const REFERENCE_COLS = 5;
 const REFERENCE_ROWS = 6;
 const REFERENCE_MAX_TILE = 62;
 const TILE_GAP = 5;
+/** Verzögerung zwischen Spalten: Welle von links nach rechts (langsamer = deutlichere Welle) */
+const REVEAL_STAGGER_MS = 480;
 
 export const Board: React.FC<BoardProps> = ({
   guesses,
@@ -87,7 +89,7 @@ export const Board: React.FC<BoardProps> = ({
           key={`${rowIndex}-${col}`}
           letter={letter}
           status={status}
-          delay={col * 300}
+          delay={col * REVEAL_STAGGER_MS}
           pop={pop}
           size={tileSize}
           selected={selected}

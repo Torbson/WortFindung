@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { TileStatus } from '../utils/gameLogic';
-import { COLORS } from '../styles/theme';
+import { COLORS, TEXT } from '../styles/theme';
 
 interface TileProps {
   letter: string;
@@ -21,6 +21,9 @@ const STATUS_COLORS: Record<TileStatus, string> = {
   tbd: 'transparent',
 };
 
+/** Eine Kachel-Umdrehung (horizontal); Stagger kommt über `delay` aus dem Board */
+const REVEAL_DURATION_MS = 900;
+
 export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, selected, onPress }) => {
   const flipAnim = useRef(new Animated.Value(0)).current;
   const popAnim = useRef(new Animated.Value(1)).current;
@@ -31,7 +34,7 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, se
       revealed.current = true;
       Animated.timing(flipAnim, {
         toValue: 1,
-        duration: 500,
+        duration: REVEAL_DURATION_MS,
         delay,
         useNativeDriver: true,
       }).start();
@@ -51,7 +54,8 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, se
 
   const isRevealed = status !== 'empty' && status !== 'tbd';
 
-  const rotateX = flipAnim.interpolate({
+  /** Horizontal um die Y-Achse; Welle von links nach rechts über gestaffeltes `delay` im Board */
+  const rotateY = flipAnim.interpolate({
     inputRange: [0, 0.5, 1],
     outputRange: ['0deg', '90deg', '0deg'],
   });
@@ -72,7 +76,7 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, se
       ? STATUS_COLORS[status]
       : COLORS.tileBorder;
 
-  const fontSize = Math.max(14, size * 0.48);
+  const fontSize = Math.max(15, size * 0.52);
 
   const tileView = (
     <Animated.View
@@ -83,8 +87,8 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, se
           height: size,
           borderColor,
           transform: [
-            { perspective: 400 },
-            { rotateX: isRevealed ? rotateX : '0deg' },
+            { perspective: 800 },
+            { rotateY: isRevealed ? rotateY : '0deg' },
             { scale: popAnim },
           ],
           backgroundColor: isRevealed ? bgColor as any : 'transparent',
@@ -92,7 +96,15 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, se
         selected && styles.selectedTile,
       ]}
     >
-      <Text style={[styles.letter, { fontSize }]}>{letter}</Text>
+      <Text
+        style={[
+          styles.letter,
+          { fontSize },
+          isRevealed && status === 'absent' && styles.letterAbsent,
+        ]}
+      >
+        {letter}
+      </Text>
     </Animated.View>
   );
 
@@ -110,6 +122,7 @@ export const Tile: React.FC<TileProps> = ({ letter, status, delay, pop, size, se
 const styles = StyleSheet.create({
   tile: {
     borderWidth: 2,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     margin: 2.5,
@@ -121,8 +134,14 @@ const styles = StyleSheet.create({
     outlineStyle: 'none',
   } as any,
   letter: {
+    ...TEXT.bold,
     color: COLORS.tileText,
-    fontWeight: '700',
     textTransform: 'uppercase',
   },
+  letterAbsent: {
+    ...TEXT.bold,
+    color: COLORS.absentMuted,
+    textDecorationLine: 'line-through',
+    textDecorationColor: COLORS.absentMuted,
+  } as any,
 });

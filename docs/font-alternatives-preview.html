@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WortFindung – Font-Alternativen (Vorschau)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;600;700&family=Barlow:wght@400;600;700&family=Bebas+Neue&family=Chakra+Petch:wght@400;600;700&family=Comfortaa:wght@400;600;700&family=DM+Sans:wght@400;600;700&family=Exo+2:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Nunito:wght@400;600;700&family=Orbitron:wght@400;600;700&family=Oswald:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Rajdhani:wght@400;600;700&family=Rubik:wght@400;600;700&family=Russo+One&family=Teko:wght@400;600;700&family=Titillium+Web:wght@400;600;700&family=Varela+Round&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg: #18181b;
+      --panel: #27272a;
+      --border: #3f3f46;
+      --muted: #a1a1aa;
+      --white: #ffffff;
+      --green: #00a651;
+      --gold: #c9a008;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 48px;
+      background: var(--bg);
+      color: var(--white);
+      font-family: system-ui, sans-serif;
+      line-height: 1.4;
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 28px;
+      max-width: 42rem;
+    }
+    .row {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+    }
+    .row h2 {
+      margin: 0 0 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .preview {
+      font-size: 1.75rem;
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+    }
+    .preview.w700 { font-weight: 700; }
+    .preview.w600 { font-weight: 600; }
+    .sub {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .tiles {
+      display: flex;
+      gap: 6px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .tile {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .tile.c { background: var(--green); color: #fff; }
+    .tile.p { background: var(--gold); color: #fff; }
+    .tile.a { background: #3f3f46; color: #a1a1aa; text-decoration: line-through; }
+    footer {
+      margin-top: 32px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    code { color: #e4e4e7; }
+  </style>
+</head>
+<body>
+  <h1>Font-Alternativen – Live-Vorschau</h1>
+  <p class="hint">
+    Diese Datei lädt unten zusätzlich Schriften von Google Fonts zum Vergleich. Zum Ansehen die Datei im Browser öffnen
+    (Doppelklick oder <code>open docs/font-alternatives-preview.html</code>).
+    <strong>System-Stacks</strong> (erster Block) brauchen <strong>kein</strong> Google Fonts – nur lokal installierte Schriften.
+    <strong>UI Rounded</strong> in der App: zuerst <code>SF Pro Rounded</code> (lokal), dann <code>ui-rounded</code> (nur Safari) – <strong>Chrome ignoriert <code>ui-rounded</code></strong>, nutzt daher die Namens-Schrift oder System-Sans.
+  </p>
+
+  <!-- System-Stacks: beliebige font-family · Google-Fonts-Zeilen: Name muss zum geladenen Font passen -->
+
+  <div class="row">
+    <h2>UI Rounded (aktuell in der App)</h2>
+    <div class="preview w700" style="font-family: 'SF Pro Rounded', ui-rounded, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'SF Pro Rounded', ui-rounded, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="tiles" style="font-family: 'SF Pro Rounded', ui-rounded, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;">
+      <span class="tile c">W</span><span class="tile p">O</span><span class="tile a">R</span><span class="tile c">T</span>
+    </div>
+    <div class="sub"><code>&quot;SF Pro Rounded&quot;, ui-rounded, system-ui, …</code> · Entspricht <code>theme.ts</code> (Web); Chrome: SF Pro nur auf Systemen mit dieser Schrift (v. a. Apple)</div>
+  </div>
+
+  <p class="hint" style="margin-top: 8px; margin-bottom: 4px;">
+    <strong>Weitere System-Font-Stacks</strong> (Aussehen je nach OS unterschiedlich – alles ohne Netzwerk-Font):
+  </p>
+
+  <div class="row">
+    <h2>UI Sans (generisch)</h2>
+    <div class="preview w700" style="font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>ui-sans-serif, system-ui, -apple-system, sans-serif</code> · Moderner CSS-Standard für UI-Text</div>
+  </div>
+
+  <div class="row">
+    <h2>Apple-first (SF auf macOS/iOS)</h2>
+    <div class="preview w700" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif</code> · Auf Windows folgt Segoe</div>
+  </div>
+
+  <div class="row">
+    <h2>Segoe / klassisches Windows-Gefühl</h2>
+    <div class="preview w700" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>&quot;Segoe UI&quot;, Tahoma, Geneva, Verdana, sans-serif</code> · oft aus Microsoft-Stacks bekannt</div>
+  </div>
+
+  <div class="row">
+    <h2>Roboto zuerst (Android / manche Setups)</h2>
+    <div class="preview w700" style="font-family: Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>Roboto, &quot;Helvetica Neue&quot;, Helvetica, Arial, sans-serif</code> · ohne Roboto: Helvetica/Arial</div>
+  </div>
+
+  <div class="row">
+    <h2>Helvetica / Arial (neutral, überall)</h2>
+    <div class="preview w700" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>&quot;Helvetica Neue&quot;, Helvetica, Arial, sans-serif</code> · sehr „klassisches“ Web</div>
+  </div>
+
+  <div class="row">
+    <h2>Nur Arial (max. Fallback-Kompatibilität)</h2>
+    <div class="preview w700" style="font-family: Arial, Helvetica, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Arial, Helvetica, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>Arial, Helvetica, sans-serif</code> · knapp, sehr verbreitet</div>
+  </div>
+
+  <div class="row">
+    <h2>Verdana (breit, gut lesbar)</h2>
+    <div class="preview w700" style="font-family: Verdana, Geneva, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Verdana, Geneva, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>Verdana, Geneva, sans-serif</code> · etwas breiter als UI-Sans</div>
+  </div>
+
+  <div class="row">
+    <h2>Tahoma (kompakt)</h2>
+    <div class="preview w700" style="font-family: Tahoma, Verdana, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Tahoma, Verdana, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>Tahoma, Verdana, sans-serif</code> · etwas enger</div>
+  </div>
+
+  <div class="row">
+    <h2>Trebuchet / Lucida (humanistisch)</h2>
+    <div class="preview w700" style="font-family: 'Trebuchet MS', 'Lucida Grande', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Trebuchet MS', 'Lucida Grande', sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>&quot;Trebuchet MS&quot;, &quot;Lucida Grande&quot;, sans-serif</code> · weicher, weniger „tech“</div>
+  </div>
+
+  <p class="hint" style="margin-top: 24px; margin-bottom: 4px;">
+    <strong>Barlow-Nähe &amp; weichere System-Sans</strong>
+    (Neo-Grotesk / weniger kantig – alles ohne Netzwerk-Font; Optima v. a. auf Apple-Geräten sichtbar):
+  </p>
+
+  <div class="row">
+    <h2>Neo-Grotesk / Barlow-Nähe (Helvetica vor UI-Sans)</h2>
+    <div class="preview w700" style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, 'Segoe UI', Roboto, Arial, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, 'Segoe UI', Roboto, Arial, sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>system-ui, -apple-system, BlinkMacSystemFont, &quot;Helvetica Neue&quot;, Helvetica, &quot;Segoe UI&quot;, Roboto, Arial, sans-serif</code> · eher Neo-Grotesk wie Barlow, oft etwas „kühler“ als pur Arial</div>
+  </div>
+
+  <div class="row">
+    <h2>Calibri / Candara / Corbel (weichere Sans, oft Windows)</h2>
+    <div class="preview w700" style="font-family: Calibri, Candara, Corbel, 'Segoe UI', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Calibri, Candara, Corbel, 'Segoe UI', sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>Calibri, Candara, Corbel, &quot;Segoe UI&quot;, sans-serif</code> · weniger „rechte Winkel“ als Arial; auf macOS/iOS ggf. Segoe-Fallback</div>
+  </div>
+
+  <div class="row">
+    <h2>Optima (humanistisch, weiche Übergänge)</h2>
+    <div class="preview w700" style="font-family: Optima, Candara, Calibri, 'Helvetica Neue', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Optima, Candara, Calibri, 'Helvetica Neue', sans-serif; font-weight: 600;">Aa Bb ÄÖÜ 123 · Nicht genug Buchstaben</div>
+    <div class="sub"><code>Optima, Candara, Calibri, &quot;Helvetica Neue&quot;, sans-serif</code> · <strong>Optima</strong> oft nur auf Apple installiert – sehr weich; sonst Candara/Calibri</div>
+  </div>
+
+  <p class="hint" style="margin-top: 24px; margin-bottom: 4px;">
+    <strong>Google Fonts</strong> (Vergleich / frühere Kandidaten – werden aus dem Netz geladen):
+  </p>
+
+  <div class="row">
+    <h2>Barlow (früher, per Google Font geladen)</h2>
+    <div class="preview w700" style="font-family: 'Barlow', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Barlow', sans-serif; font-weight: 600;">Neutral-modern, sehr gut lesbar</div>
+  </div>
+
+  <p class="hint" style="margin-top: 8px; margin-bottom: 4px;">
+    <strong>Weicher / rundere Google Fonts</strong> (stärker abgerundete Formen als Barlow – nur zum Vergleich, nicht in der App):
+  </p>
+
+  <div class="row">
+    <h2>Nunito</h2>
+    <div class="preview w700" style="font-family: Nunito, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Nunito, sans-serif; font-weight: 600;">Sehr rund, freundlich – ähnliche UI-Rolle wie Barlow, aber weicher</div>
+  </div>
+
+  <div class="row">
+    <h2>Quicksand</h2>
+    <div class="preview w700" style="font-family: Quicksand, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Quicksand, sans-serif; font-weight: 600;">Geometrisch, stark abgerundete Enden</div>
+  </div>
+
+  <div class="row">
+    <h2>Rubik</h2>
+    <div class="preview w700" style="font-family: Rubik, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Rubik, sans-serif; font-weight: 600;">Etwas weichere Ecken als reine Grotesk, gut für UI</div>
+  </div>
+
+  <div class="row">
+    <h2>DM Sans</h2>
+    <div class="preview w700" style="font-family: 'DM Sans', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'DM Sans', sans-serif; font-weight: 600;">Neutral, leicht „weicher“ als klassisches Grotesk</div>
+  </div>
+
+  <div class="row">
+    <h2>Comfortaa</h2>
+    <div class="preview w700" style="font-family: Comfortaa, sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: Comfortaa, sans-serif; font-weight: 600;">Deutlich rund – eher Display/Branding als reines Wordle-UI</div>
+  </div>
+
+  <div class="row">
+    <h2>Varela Round</h2>
+    <div class="preview w700" style="font-family: 'Varela Round', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Varela Round', sans-serif; font-weight: 600;">Komplett abgerundetes Sans – sehr weich</div>
+  </div>
+
+  <div class="row">
+    <h2>Rajdhani</h2>
+    <div class="preview w700" style="font-family: 'Rajdhani', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Rajdhani', sans-serif; font-weight: 600;">Technisch / sportlich</div>
+  </div>
+
+  <div class="row">
+    <h2>Barlow Semi Condensed</h2>
+    <div class="preview w700" style="font-family: 'Barlow Semi Condensed', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600;">Etwas schmaler – gut für lange Wörter</div>
+  </div>
+
+  <div class="row">
+    <h2>Exo 2</h2>
+    <div class="preview w700" style="font-family: 'Exo 2', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Exo 2', sans-serif; font-weight: 600;">Futuristisch / Gaming</div>
+  </div>
+
+  <div class="row">
+    <h2>Chakra Petch</h2>
+    <div class="preview w700" style="font-family: 'Chakra Petch', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Chakra Petch', sans-serif; font-weight: 600;">Tech / sportlich</div>
+  </div>
+
+  <div class="row">
+    <h2>Titillium Web</h2>
+    <div class="preview w700" style="font-family: 'Titillium Web', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Titillium Web', sans-serif; font-weight: 600;">Sachlich, ruhig</div>
+  </div>
+
+  <div class="row">
+    <h2>Oswald</h2>
+    <div class="preview w700" style="font-family: 'Oswald', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Oswald', sans-serif; font-weight: 600;">Schmal, „Poster“</div>
+  </div>
+
+  <div class="row">
+    <h2>Teko</h2>
+    <div class="preview w700" style="font-family: 'Teko', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Teko', sans-serif; font-weight: 600;">Esports, sehr kompakt</div>
+  </div>
+
+  <div class="row">
+    <h2>Russo One</h2>
+    <div class="preview" style="font-family: 'Russo One', sans-serif; font-weight: 400;">WORTFINDUNG</div>
+    <div class="sub">Nur ein Schnitt – eher für Titel</div>
+  </div>
+
+  <div class="row">
+    <h2>Bebas Neue</h2>
+    <div class="preview" style="font-family: 'Bebas Neue', sans-serif; font-weight: 400;">WORTFINDUNG</div>
+    <div class="sub">Nur Großbuchstaben-Stil – für Fließtext ungeeignet</div>
+  </div>
+
+  <div class="row">
+    <h2>Montserrat</h2>
+    <div class="preview w700" style="font-family: 'Montserrat', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Montserrat', sans-serif; font-weight: 600;">Geometrisch, neutral</div>
+  </div>
+
+  <div class="row">
+    <h2>Orbitron</h2>
+    <div class="preview w700" style="font-family: 'Orbitron', sans-serif;">WORTFINDUNG</div>
+    <div class="sub" style="font-family: 'Orbitron', sans-serif; font-weight: 600;">Sci‑Fi / Digital</div>
+  </div>
+
+  <footer>
+    Datei: <code>docs/font-alternatives-preview.html</code> · Farben angelehnt an die App (Hintergrund + Grün/Gold)
+  </footer>
+</body>
+</html>
