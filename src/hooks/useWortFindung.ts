@@ -30,6 +30,8 @@ interface WortFindungState {
   letterStatuses: Record<string, LetterStatus>;
   shake: boolean;
   revealRow: number;
+  startedAt: number | null;
+  solvedAt: number | null;
 }
 
 const validWordsCache: Record<string, Set<string>> = {};
@@ -53,9 +55,15 @@ function getTodayDateKey(): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
 }
 
-function getDailyWord(solutions: string[]): string {
-  const now = new Date();
-  const noonUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
+function getDailyWord(solutions: string[], dateKey?: string): string {
+  let noonUtc: number;
+  if (dateKey) {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    noonUtc = Date.UTC(y, m - 1, d, 12, 0, 0);
+  } else {
+    const now = new Date();
+    noonUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
+  }
   const timestamp = Math.floor(noonUtc / 1000);
 
   let hash = 5381;
@@ -78,7 +86,7 @@ function saveState(lang: Language, wordLength: WordLength, dateKey: string, stat
   try {
     const { shake, revealRow, message, popCell, ...persistable } = state;
     localStorage.setItem(storageKey(lang, wordLength, dateKey), JSON.stringify(persistable));
-  } catch {}
+  } catch { /* storage full or unavailable */ }
 }
 
 function loadState(lang: Language, wordLength: WordLength, dateKey: string): Partial<WortFindungState> | null {
@@ -113,11 +121,11 @@ function firstEmptyIndex(guess: string[]): number {
   return idx === -1 ? guess.length - 1 : idx;
 }
 
-function createInitialState(lang: Language, wordLength: WordLength): WortFindungState {
+function createInitialState(lang: Language, wordLength: WordLength, dateOverride?: string): WortFindungState {
   const solutions = getSolutions(lang, wordLength);
-  const dateKey = getTodayDateKey();
+  const dateKey = dateOverride ?? getTodayDateKey();
   const saved = loadState(lang, wordLength, dateKey);
-  const solution = getDailyWord(solutions);
+  const solution = getDailyWord(solutions, dateKey);
 
   if (saved && saved.solution === solution) {
     const currentGuess = parseCurrentGuess(saved.currentGuess, wordLength);
@@ -135,6 +143,8 @@ function createInitialState(lang: Language, wordLength: WordLength): WortFindung
       letterStatuses: saved.letterStatuses ?? {},
       shake: false,
       revealRow: -1,
+      startedAt: (saved as any).startedAt ?? null,
+      solvedAt: (saved as any).solvedAt ?? null,
     };
   }
 
@@ -152,22 +162,24 @@ function createInitialState(lang: Language, wordLength: WordLength): WortFindung
     letterStatuses: {},
     shake: false,
     revealRow: -1,
+    startedAt: null,
+    solvedAt: null,
   };
 }
 
-export function useWortFindung(language: Language, wordLength: WordLength) {
-  const [state, setState] = useState<WortFindungState>(() => createInitialState(language, wordLength));
+export function useWortFindung(language: Language, wordLength: WordLength, dateOverride?: string) {
+  const [state, setState] = useState<WortFindungState>(() => createInitialState(language, wordLength, dateOverride));
   const messageTimer = useRef<ReturnType<typeof setTimeout>>();
   const maxRows = GAME_ROWS[wordLength];
+  const effectiveDateKey = dateOverride ?? getTodayDateKey();
 
   useEffect(() => {
-    setState(createInitialState(language, wordLength));
-  }, [language, wordLength]);
+    setState(createInitialState(language, wordLength, dateOverride));
+  }, [language, wordLength, dateOverride]);
 
   useEffect(() => {
-    const dateKey = getTodayDateKey();
-    saveState(language, wordLength, dateKey, state);
-  }, [state, language, wordLength]);
+    saveState(language, wordLength, effectiveDateKey, state);
+  }, [state, language, wordLength, effectiveDateKey]);
 
   const flashMessage = useCallback((msg: string, persist = false) => {
     if (messageTimer.current) clearTimeout(messageTimer.current);
@@ -274,6 +286,9 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
       const won = guessStr === prev.solution;
       const isLastRow = prev.currentRow === maxRows - 1;
       const gameOver = won || isLastRow;
+      const now = Date.now();
+      const startedAt = prev.startedAt ?? now;
+      const solvedAt = gameOver ? now : null;
 
       if (won) {
         const winMsgs = language === 'de'
@@ -298,6 +313,8 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
         letterStatuses: newLetterStatuses,
         shake: false,
         revealRow: prev.currentRow,
+        startedAt,
+        solvedAt,
       };
     });
   }, [language, wordLength, maxRows, flashMessage]);
@@ -309,6 +326,10 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
     }
   }, [state.shake]);
 
+  const durationSeconds = state.startedAt && state.solvedAt
+    ? Math.round((state.solvedAt - state.startedAt) / 1000)
+    : null;
+
   return {
     ...state,
     addLetter,
@@ -318,5 +339,7 @@ export function useWortFindung(language: Language, wordLength: WordLength) {
     moveSelection,
     rows: maxRows,
     cols: wordLength as number,
+    durationSeconds,
+    dateKey: effectiveDateKey,
   };
 }

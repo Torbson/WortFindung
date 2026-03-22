@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,188 @@ import {
   Pressable,
   Platform,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Board } from './src/components/Board';
 import { Keyboard } from './src/components/Keyboard';
-import { useWortFindung, Language, WordLength } from './src/hooks/useWortFindung';
+import { useWortFindung, Language, WordLength, GAME_ROWS } from './src/hooks/useWortFindung';
+import { evaluateGuess, TileStatus } from './src/utils/gameLogic';
 import { COLORS } from './src/styles/theme';
 
 const WORD_LENGTHS: WordLength[] = [4, 5, 6, 7, 8];
+const LANGUAGES: { key: Language; label: string }[] = [
+  { key: 'de', label: 'Deutsch' },
+  { key: 'en', label: 'English' },
+];
+
+const SHARE_SVG = `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>`;
+const COPY_SVG = `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+const GEAR_SVG = `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+function SvgIcon({ svg, size }: { svg: string; size: number }) {
+  if (Platform.OS === 'web') {
+    return React.createElement('div', {
+      style: { width: size, height: size },
+      dangerouslySetInnerHTML: { __html: svg },
+    });
+  }
+  return <Text style={{ fontSize: size, color: COLORS.white }}>*</Text>;
+}
+
+function Toggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
+  return (
+    <Pressable onPress={onToggle} style={[styles.toggleTrack, value && styles.toggleTrackOn]}>
+      <View style={[styles.toggleKnob, value && styles.toggleKnobOn]} />
+    </Pressable>
+  );
+}
+
+function loadSetting(key: string, fallback: boolean): boolean {
+  if (Platform.OS !== 'web') return fallback;
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === 'true';
+  } catch { return fallback; }
+}
+
+function saveSetting(key: string, value: boolean) {
+  if (Platform.OS !== 'web') return;
+  try { localStorage.setItem(key, String(value)); } catch { /* ignore */ }
+}
+
+function formatTimer(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function useTimer(startedAt: number | null, solvedAt: number | null, enabled: boolean): number {
+  const [elapsed, setElapsed] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    if (!enabled || !startedAt) {
+      setElapsed(0);
+      return;
+    }
+
+    if (solvedAt) {
+      setElapsed(Math.floor((solvedAt - startedAt) / 1000));
+      return;
+    }
+
+    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [startedAt, solvedAt, enabled]);
+
+  return elapsed;
+}
+
+interface SharedData {
+  lang: Language;
+  wordLength: WordLength;
+  date: string;
+  guesses: string[];
+  duration: number | null;
+}
+
+function parseUrlParams(): { lang?: Language; wordLength?: WordLength; date?: string; shared?: SharedData } {
+  if (Platform.OS !== 'web') return {};
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const l = params.get('l');
+    const n = params.get('n');
+    const d = params.get('d');
+    const g = params.get('g');
+    const t = params.get('t');
+
+    const lang = (l === 'de' || l === 'en') ? l : undefined;
+    const wordLength = n ? parseInt(n, 10) as WordLength : undefined;
+    const validLengths = [4, 5, 6, 7, 8];
+    const wl = wordLength && validLengths.includes(wordLength) ? wordLength : undefined;
+    const date = d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+
+    if (g && lang && wl && date) {
+      const guesses = g.split(',').map(w => decodeURIComponent(w).toUpperCase());
+      const duration = t ? parseInt(t, 10) : null;
+      return { lang, wordLength: wl, date, shared: { lang, wordLength: wl, date, guesses, duration } };
+    }
+
+    return { lang, wordLength: wl, date };
+  } catch {
+    return {};
+  }
+}
+
+function clearUrlParams() {
+  if (Platform.OS !== 'web') return;
+  try {
+    window.history.replaceState({}, '', window.location.pathname);
+  } catch { /* ignore */ }
+}
+
+function buildShareUrl(lang: Language, wordLength: WordLength, date: string, guesses?: string[], duration?: number | null): string {
+  const base = Platform.OS === 'web'
+    ? window.location.origin + window.location.pathname
+    : 'https://wortfindung.app';
+  const params = new URLSearchParams();
+  params.set('l', lang);
+  params.set('n', String(wordLength));
+  params.set('d', date);
+  if (guesses && guesses.length > 0) {
+    params.set('g', guesses.map(w => encodeURIComponent(w)).join(','));
+  }
+  if (duration != null && duration > 0) {
+    params.set('t', String(duration));
+  }
+  return `${base}?${params.toString()}`;
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
+const TILE_EMOJIS: Record<string, string> = {
+  correct: '\u{1F7E9}',
+  present: '\u{1F7E8}',
+  absent: '\u{2B1B}',
+};
+
+function buildEmojiGrid(guesses: string[], solution: string): string {
+  return guesses.map(g => {
+    const eval_ = evaluateGuess(g, solution);
+    return eval_.map(s => TILE_EMOJIS[s] ?? '\u{2B1B}').join('');
+  }).join('\n');
+}
+
+async function shareOrCopy(url: string, text?: string) {
+  if (Platform.OS !== 'web') return false;
+  const fullText = text ? `${text}\n${url}` : url;
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: fullText });
+      return true;
+    } catch { /* user cancelled or not supported */ }
+  }
+  try {
+    await navigator.clipboard.writeText(fullText);
+    return true;
+  } catch { /* clipboard not available */ }
+  return false;
+}
 
 function useWebSetup() {
   useEffect(() => {
@@ -50,20 +224,168 @@ function useWebSetup() {
   }, []);
 }
 
+function SharedResultView({ data, onClose }: { data: SharedData; onClose: () => void }) {
+  const { guesses, wordLength, lang, duration, date } = data;
+  const solutions = require('./src/data/wordsDE').SOLUTIONS_DE;
+  const solutionsEN = require('./src/data/wordsEN').SOLUTIONS_EN;
+  const allSolutions = lang === 'de' ? solutions : solutionsEN;
+  const wordList = allSolutions[wordLength] ?? [];
+
+  const getDailyWordForDate = (words: string[], dateKey: string) => {
+    const [y, m, d_] = dateKey.split('-').map(Number);
+    const noonUtc = Date.UTC(y, m - 1, d_, 12, 0, 0);
+    const timestamp = Math.floor(noonUtc / 1000);
+    let hash = 5381;
+    const str = timestamp.toString();
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return words[Math.abs(hash) % words.length];
+  };
+
+  const solution = getDailyWordForDate(wordList, date);
+  const maxGuesses = GAME_ROWS[wordLength];
+  const won = guesses.length > 0 && guesses[guesses.length - 1] === solution;
+  const evals = guesses.map(g => evaluateGuess(g, solution));
+
+  const STATUS_COLORS_MAP: Record<string, string> = {
+    correct: COLORS.correct,
+    present: COLORS.present,
+    absent: COLORS.absent,
+  };
+
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.settingsPanel} onPress={(e) => e.stopPropagation()}>
+          <Text style={styles.settingsTitle}>
+            {won ? (lang === 'de' ? 'Gelöst!' : 'Solved!') : (lang === 'de' ? 'Geteiltes Ergebnis' : 'Shared Result')}
+          </Text>
+
+          <Text style={styles.sharedSubtitle}>
+            WortFindung {date} · {lang.toUpperCase()} · {wordLength} {lang === 'de' ? 'Buchstaben' : 'letters'}
+          </Text>
+
+          <Text style={styles.sharedScore}>
+            {won ? `${guesses.length}/${maxGuesses}` : `X/${maxGuesses}`}
+            {duration != null && duration > 0 ? ` · ${formatDuration(duration)}` : ''}
+          </Text>
+
+          <View style={styles.sharedGrid}>
+            {evals.map((row, ri) => (
+              <View key={ri} style={styles.sharedRow}>
+                {row.map((status: TileStatus, ci: number) => (
+                  <View
+                    key={ci}
+                    style={[
+                      styles.sharedTile,
+                      { backgroundColor: STATUS_COLORS_MAP[status] ?? COLORS.absent },
+                    ]}
+                  >
+                    <Text style={styles.sharedTileLetter}>{guesses[ri][ci]}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+
+          <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Text style={styles.closeBtnText}>
+              {lang === 'de' ? 'Selbst spielen' : 'Play it yourself'}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function App() {
-  const [language, setLanguage] = useState<Language>('de');
-  const [wordLength, setWordLength] = useState<WordLength>(5);
-  const game = useWortFindung(language, wordLength);
+  const urlParams = useMemo(() => parseUrlParams(), []);
+  const [language, setLanguage] = useState<Language>(urlParams.lang ?? 'de');
+  const [wordLength, setWordLength] = useState<WordLength>(urlParams.wordLength ?? 5);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareToast, setShareToast] = useState('');
+  const [sharedData, setSharedData] = useState<SharedData | null>(urlParams.shared ?? null);
+  const [showTimer, setShowTimer] = useState(() => loadSetting('wortfindung-timer', false));
+
+  const dateOverride = urlParams.date;
+  const game = useWortFindung(language, wordLength, dateOverride);
+  const timerElapsed = useTimer(game.startedAt, game.solvedAt, showTimer);
   const { width } = useWindowDimensions();
   const isNarrow = width < 400;
 
   useWebSetup();
 
   useEffect(() => {
+    if (urlParams.shared || urlParams.lang || urlParams.wordLength) {
+      clearUrlParams();
+    }
+  }, []);
+
+  const toggleSettings = useCallback(() => {
+    setSettingsOpen((prev) => !prev);
+    setShareOpen(false);
+  }, []);
+
+  const toggleTimer = useCallback(() => {
+    setShowTimer((prev) => {
+      const next = !prev;
+      saveSetting('wortfindung-timer', next);
+      return next;
+    });
+  }, []);
+
+  const toggleShare = useCallback(() => {
+    setShareOpen((prev) => !prev);
+    setSettingsOpen(false);
+  }, []);
+
+  const handleShare = useCallback(async (withGuesses: boolean) => {
+    const url = buildShareUrl(
+      language,
+      wordLength,
+      game.dateKey,
+      withGuesses ? game.guesses : undefined,
+      withGuesses ? game.durationSeconds : undefined,
+    );
+
+    let text: string | undefined;
+    if (withGuesses && game.guesses.length > 0) {
+      const maxG = GAME_ROWS[wordLength];
+      const won = game.gameWon;
+      const score = won ? `${game.guesses.length}/${maxG}` : `X/${maxG}`;
+      const emoji = buildEmojiGrid(game.guesses, game.solution);
+      const dur = game.durationSeconds != null && game.durationSeconds > 0
+        ? ` · ${formatDuration(game.durationSeconds)}`
+        : '';
+      text = `WortFindung ${game.dateKey} · ${language.toUpperCase()} · ${wordLength}\n${score}${dur}\n\n${emoji}`;
+    }
+
+    const ok = await shareOrCopy(url, text);
+    setShareOpen(false);
+    if (ok) {
+      setShareToast(language === 'de' ? 'Link kopiert!' : 'Link copied!');
+      setTimeout(() => setShareToast(''), 2000);
+    }
+  }, [language, wordLength, game.dateKey, game.guesses, game.gameWon, game.solution, game.durationSeconds]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === 'Escape') {
+        if (settingsOpen) { setSettingsOpen(false); return; }
+        if (shareOpen) { setShareOpen(false); return; }
+        if (sharedData) { setSharedData(null); return; }
+        return;
+      }
+
+      if (settingsOpen || shareOpen || sharedData) return;
 
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -90,7 +412,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [game.submitGuess, game.deleteLetter, game.addLetter, game.moveSelection, language]);
+  }, [game.submitGuess, game.deleteLetter, game.addLetter, game.moveSelection, language, settingsOpen, shareOpen, sharedData]);
 
   return (
     <View style={styles.container}>
@@ -103,45 +425,137 @@ export default function App() {
         >
           WortFindung
         </Text>
-        <View style={styles.langSwitch}>
+        <View style={styles.headerIcons}>
           <Pressable
-            onPress={() => setLanguage('de')}
-            style={[styles.langBtn, language === 'de' && styles.langBtnActive]}
+            onPress={toggleShare}
+            style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+            hitSlop={8}
           >
-            <Text style={[styles.langText, language === 'de' && styles.langTextActive]}>
-              DE
-            </Text>
+            <SvgIcon svg={SHARE_SVG} size={isNarrow ? 20 : 22} />
           </Pressable>
           <Pressable
-            onPress={() => setLanguage('en')}
-            style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
+            onPress={toggleSettings}
+            style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+            hitSlop={8}
           >
-            <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>
-              EN
-            </Text>
+            <SvgIcon svg={GEAR_SVG} size={isNarrow ? 20 : 22} />
           </Pressable>
         </View>
       </View>
 
       <View style={styles.divider} />
 
-      <View style={styles.lengthBar}>
-        {WORD_LENGTHS.map((len) => (
-          <Pressable
-            key={len}
-            onPress={() => setWordLength(len)}
-            style={[styles.lengthBtn, wordLength === len && styles.lengthBtnActive]}
-          >
-            <Text style={[styles.lengthText, wordLength === len && styles.lengthTextActive]}>
-              {len}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      {settingsOpen && (
+        <Modal transparent animationType="fade" visible onRequestClose={toggleSettings}>
+          <Pressable style={styles.overlay} onPress={toggleSettings}>
+            <Pressable style={styles.settingsPanel} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.settingsTitle}>Einstellungen</Text>
 
-      {game.message ? (
+              <Text style={styles.settingsLabel}>Sprache</Text>
+              <View style={styles.optionRow}>
+                {LANGUAGES.map(({ key, label }) => (
+                  <Pressable
+                    key={key}
+                    onPress={() => setLanguage(key)}
+                    style={[styles.optionBtn, language === key && styles.optionBtnActive]}
+                  >
+                    <Text style={[styles.optionText, language === key && styles.optionTextActive]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.settingsLabel}>Buchstabenlänge</Text>
+              <View style={styles.optionRow}>
+                {WORD_LENGTHS.map((len) => (
+                  <Pressable
+                    key={len}
+                    onPress={() => setWordLength(len)}
+                    style={[styles.optionBtn, wordLength === len && styles.optionBtnActive]}
+                  >
+                    <Text style={[styles.optionText, wordLength === len && styles.optionTextActive]}>
+                      {len}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.toggleRow}>
+                <Text style={styles.settingsLabel}>Timer</Text>
+                <Toggle value={showTimer} onToggle={toggleTimer} />
+              </View>
+
+              <Pressable onPress={toggleSettings} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>Fertig</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      {shareOpen && (
+        <Modal transparent animationType="fade" visible onRequestClose={toggleShare}>
+          <Pressable style={styles.overlay} onPress={toggleShare}>
+            <Pressable style={styles.settingsPanel} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.settingsTitle}>Teilen</Text>
+
+              <Text style={styles.shareDesc}>
+                {language === 'de'
+                  ? 'Link zum heutigen Rätsel — ohne Lösung'
+                  : 'Link to today\'s puzzle — no spoilers'}
+              </Text>
+              <Pressable
+                onPress={() => handleShare(false)}
+                style={({ pressed }) => [styles.shareOption, pressed && styles.shareOptionPressed]}
+              >
+                <SvgIcon svg={COPY_SVG} size={18} />
+                <Text style={styles.shareOptionTitle}>
+                  {language === 'de' ? 'Puzzle teilen' : 'Share puzzle'}
+                </Text>
+              </Pressable>
+
+              <Text style={[styles.shareDesc, !game.guesses.length && styles.shareDescDisabled]}>
+                {language === 'de'
+                  ? game.gameOver
+                    ? 'Link mit deiner Lösung und Dauer'
+                    : 'Link mit deinem bisherigen Stand'
+                  : game.gameOver
+                    ? 'Link with your solution and time'
+                    : 'Link with your progress so far'}
+              </Text>
+              <Pressable
+                onPress={() => handleShare(true)}
+                style={({ pressed }) => [
+                  styles.shareOption,
+                  !game.guesses.length && styles.shareOptionDisabled,
+                  pressed && !(!game.guesses.length) && styles.shareOptionPressed,
+                ]}
+                disabled={!game.guesses.length}
+              >
+                <SvgIcon svg={COPY_SVG} size={18} />
+                <Text style={[styles.shareOptionTitle, !game.guesses.length && styles.shareOptionDisabledText]}>
+                  {language === 'de' ? 'Ergebnis teilen' : 'Share result'}
+                </Text>
+              </Pressable>
+
+              <Pressable onPress={toggleShare} style={[styles.closeBtn, { marginTop: 16 }]}>
+                <Text style={styles.closeBtnText}>
+                  {language === 'de' ? 'Abbrechen' : 'Cancel'}
+                </Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      {sharedData && (
+        <SharedResultView data={sharedData} onClose={() => setSharedData(null)} />
+      )}
+
+      {(game.message || shareToast) ? (
         <View style={styles.messageBanner}>
-          <Text style={styles.messageText}>{game.message}</Text>
+          <Text style={styles.messageText}>{shareToast || game.message}</Text>
         </View>
       ) : null}
 
@@ -161,6 +575,11 @@ export default function App() {
         />
 
         <View style={styles.bottom}>
+          {showTimer && (
+            <View style={styles.timerRow}>
+              <Text style={styles.timerText}>{formatTimer(timerElapsed)}</Text>
+            </View>
+          )}
           <Keyboard
             onKeyPress={game.addLetter}
             onEnter={game.submitGuess}
@@ -198,59 +617,188 @@ const styles = StyleSheet.create({
     fontSize: 22,
     letterSpacing: 0.5,
   },
-  lengthBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  lengthBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: COLORS.headerBorder,
-  },
-  lengthBtnActive: {
-    backgroundColor: COLORS.correct,
-    borderColor: COLORS.correct,
-  },
-  lengthText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  lengthTextActive: {
-    color: COLORS.white,
-  },
-  langSwitch: {
+  headerIcons: {
     flexDirection: 'row',
     gap: 4,
-    flexShrink: 0,
+    alignItems: 'center',
   },
-  langBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: COLORS.headerBorder,
-  },
-  langBtnActive: {
-    backgroundColor: COLORS.white,
-    borderColor: COLORS.white,
-  },
-  langText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  langTextActive: {
-    color: COLORS.background,
+  iconBtn: {
+    padding: 6,
+    borderRadius: 6,
   },
   divider: {
     height: 1,
     backgroundColor: COLORS.headerBorder,
   },
+
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  settingsPanel: {
+    backgroundColor: '#1e1e1f',
+    borderRadius: 12,
+    padding: 24,
+    width: '88%',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: COLORS.headerBorder,
+  },
+  settingsTitle: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 20,
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  settingsLabel: {
+    color: '#999',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 18,
+  },
+  optionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.headerBorder,
+    alignItems: 'center',
+  },
+  optionBtnActive: {
+    backgroundColor: COLORS.correct,
+    borderColor: COLORS.correct,
+  },
+  optionText: {
+    color: '#aaa',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  optionTextActive: {
+    color: COLORS.white,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  toggleTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#555',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  toggleTrackOn: {
+    backgroundColor: COLORS.correct,
+  },
+  toggleKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.white,
+  },
+  toggleKnobOn: {
+    alignSelf: 'flex-end',
+  },
+  closeBtn: {
+    marginTop: 8,
+    backgroundColor: COLORS.headerBorder,
+    paddingVertical: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  closeBtnText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  shareDesc: {
+    color: '#999',
+    fontSize: 12,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  shareDescDisabled: {
+    opacity: 0.4,
+  },
+  shareOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: COLORS.headerBorder,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  shareOptionTitle: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  shareOptionPressed: {
+    backgroundColor: '#3a3a3c',
+    borderColor: '#555',
+  },
+  shareOptionDisabled: {
+    opacity: 0.4,
+  },
+  shareOptionDisabledText: {
+    color: '#666',
+  },
+
+  sharedSubtitle: {
+    color: '#999',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sharedScore: {
+    color: COLORS.white,
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  sharedGrid: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sharedRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 4,
+  },
+  sharedTile: {
+    width: 36,
+    height: 36,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sharedTileLetter: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
   messageBanner: {
     position: 'absolute',
     top: 70,
@@ -277,5 +825,17 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     paddingBottom: 4,
+  },
+  timerRow: {
+    width: '100%',
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  timerText: {
+    color: '#888',
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
 });
