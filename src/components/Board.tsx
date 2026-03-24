@@ -15,6 +15,13 @@ interface BoardProps {
   rows: number;
   cols: number;
   onSelectCell: (index: number) => void;
+  /** Meldung oben: Raster oben ausrichten statt vertikal zu zentrieren (engerer Abstand zur Zeile) */
+  pinGridTop?: boolean;
+  gameWon?: boolean;
+  /** Index der grünen Gewinnzeile, oder -1 */
+  winRowIndex?: number;
+  /** Erhöht sich beim Übergang zu gameWon → Replay-Animation für Zeilen oberhalb der grünen Reihe */
+  winReplayNonce?: number;
 }
 
 const REFERENCE_COLS = 5;
@@ -23,6 +30,16 @@ const REFERENCE_MAX_TILE = 62;
 const TILE_GAP = 5;
 /** Verzögerung zwischen Spalten: Welle von links nach rechts (langsamer = deutlichere Welle) */
 const REVEAL_STAGGER_MS = 480;
+const REVEAL_DURATION_MS = 900;
+const CELEBRATION_GAP_MS = 280;
+
+/**
+ * Ende der Drehung der **Gewinnzeile**: dort ist das Delay nur `col * STAGGER` (nicht `winRow * cols * …`),
+ * alle Kacheln starten beim gleichen Submit.
+ */
+function winningRowLastTileRevealEndMs(cols: number): number {
+  return (cols - 1) * REVEAL_STAGGER_MS + REVEAL_DURATION_MS;
+}
 
 export const Board: React.FC<BoardProps> = ({
   guesses,
@@ -35,9 +52,26 @@ export const Board: React.FC<BoardProps> = ({
   rows,
   cols,
   onSelectCell,
+  pinGridTop,
+  gameWon = false,
+  winRowIndex = -1,
+  winReplayNonce = 0,
 }) => {
   const { width, height } = useWindowDimensions();
   const shakeAnim = React.useRef(new Animated.Value(0)).current;
+
+  /** Jubel unten erst, wenn die Gewinnzeile fertig gedreht hat (vermeidet sofortige Umstellung) */
+  const [belowCelebrationVisible, setBelowCelebrationVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!gameWon || winRowIndex < 0) {
+      setBelowCelebrationVisible(false);
+      return;
+    }
+    const ms = winningRowLastTileRevealEndMs(cols) + CELEBRATION_GAP_MS;
+    const id = setTimeout(() => setBelowCelebrationVisible(true), ms);
+    return () => clearTimeout(id);
+  }, [gameWon, winRowIndex, cols]);
 
   const scaleFactor = Math.sqrt(
     (REFERENCE_COLS * REFERENCE_ROWS) / (cols * rows),
@@ -73,11 +107,33 @@ export const Board: React.FC<BoardProps> = ({
       let status: TileStatus = 'empty';
       let pop = false;
       let selected = false;
+      let delay = col * REVEAL_STAGGER_MS;
+      let winReplayRole: 'none' | 'above' | 'below' = 'none';
+      let celebrationSeed: number | undefined;
 
-      if (isGuessedRow) {
+      if (
+        gameWon &&
+        winRowIndex >= 0 &&
+        rowIndex > winRowIndex &&
+        belowCelebrationVisible
+      ) {
+        letter = '';
+        status = 'empty';
+        winReplayRole = 'below';
+        const seed = rowIndex * 10007 + col * 10009 + winRowIndex * 13001;
+        celebrationSeed = seed;
+        const jitter = ((seed ^ (seed >>> 7)) % 700 + 700) % 700;
+        const scatter = (col * 47 + rowIndex * 83 + (seed & 255)) % 320;
+        /** Kein `belowCelebrationStartMs` mehr: sichtbar erst nach Timer, nur leichte Staffelung */
+        delay = jitter + scatter;
+      } else if (isGuessedRow) {
         letter = guesses[rowIndex][col];
         status = evaluations[rowIndex][col];
-      } else if (isCurrentRow) {
+        if (gameWon && winRowIndex >= 0 && rowIndex < winRowIndex) {
+          winReplayRole = 'above';
+          delay = rowIndex * cols * REVEAL_STAGGER_MS + col * REVEAL_STAGGER_MS;
+        }
+      } else if (isCurrentRow && !(gameWon && winRowIndex >= 0 && rowIndex > winRowIndex)) {
         letter = currentGuess[col] || '';
         status = letter ? 'tbd' : 'empty';
         pop = col === popCell;
@@ -89,11 +145,18 @@ export const Board: React.FC<BoardProps> = ({
           key={`${rowIndex}-${col}`}
           letter={letter}
           status={status}
-          delay={col * REVEAL_STAGGER_MS}
+          delay={delay}
           pop={pop}
           size={tileSize}
           selected={selected}
-          onPress={isCurrentRow ? () => onSelectCell(col) : undefined}
+          onPress={
+            isCurrentRow && !(gameWon && rowIndex > winRowIndex)
+              ? () => onSelectCell(col)
+              : undefined
+          }
+          winReplayNonce={winReplayNonce}
+          winReplayRole={winReplayRole}
+          celebrationSeed={celebrationSeed}
         />,
       );
     }
@@ -115,7 +178,7 @@ export const Board: React.FC<BoardProps> = ({
   };
 
   return (
-    <View style={styles.board}>
+    <View style={[styles.board, pinGridTop && styles.boardPinTop]}>
       {Array.from({ length: rows }, (_, i) => renderRow(i))}
     </View>
   );
@@ -126,6 +189,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexGrow: 1,
+  },
+  boardPinTop: {
+    justifyContent: 'flex-start',
   },
   row: {
     flexDirection: 'row',

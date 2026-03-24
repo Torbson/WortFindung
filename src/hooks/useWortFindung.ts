@@ -181,14 +181,12 @@ export function useWortFindung(language: Language, wordLength: WordLength, dateO
     saveState(language, wordLength, effectiveDateKey, state);
   }, [state, language, wordLength, effectiveDateKey]);
 
-  const flashMessage = useCallback((msg: string, persist = false) => {
+  const flashMessage = useCallback((msg: string) => {
     if (messageTimer.current) clearTimeout(messageTimer.current);
     setState(prev => ({ ...prev, message: msg }));
-    if (!persist) {
-      messageTimer.current = setTimeout(() => {
-        setState(prev => ({ ...prev, message: '' }));
-      }, 2000);
-    }
+    messageTimer.current = setTimeout(() => {
+      setState(prev => ({ ...prev, message: '' }));
+    }, 2000);
   }, []);
 
   const addLetter = useCallback((letter: string) => {
@@ -289,16 +287,6 @@ export function useWortFindung(language: Language, wordLength: WordLength, dateO
       const now = Date.now();
       const startedAt = prev.startedAt ?? now;
       const solvedAt = gameOver ? now : null;
-
-      if (won) {
-        const winMsgs = language === 'de'
-          ? ['Genial!', 'Großartig!', 'Sehr gut!', 'Gut!', 'Knapp!', 'Gerade noch!', 'Puh!', 'Wow!', 'Geschafft!']
-          : ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Close!', 'Phew!', 'Wow!', 'Made it!'];
-        const msgIdx = Math.min(prev.currentRow, winMsgs.length - 1);
-        setTimeout(() => flashMessage(winMsgs[msgIdx], true), 1600);
-      } else if (isLastRow) {
-        setTimeout(() => flashMessage(prev.solution, true), 1600);
-      }
 
       return {
         ...prev,

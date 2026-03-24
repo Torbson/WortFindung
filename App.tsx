@@ -161,6 +161,30 @@ function formatDuration(seconds: number): string {
   return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
+const WIN_MESSAGES: Record<Language, string[]> = {
+  de: ['Genial!', 'Großartig!', 'Sehr gut!', 'Gut!', 'Knapp!', 'Gerade noch!', 'Puh!', 'Wow!', 'Geschafft!'],
+  en: ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Close!', 'Phew!', 'Wow!', 'Made it!'],
+};
+
+/** Meldung aus dem Brett: komplett grüne Zeile → Gewinn; sonst bei Spielende die Lösung. Bleibt nach Reload (evaluations aus Speicher). */
+function resultMessageFromBoard(
+  evaluations: TileStatus[][],
+  gameOver: boolean,
+  solution: string,
+  language: Language,
+): string {
+  if (!evaluations.length) return '';
+  const last = evaluations[evaluations.length - 1];
+  const allGreen = last.length > 0 && last.every((s) => s === 'correct');
+  if (allGreen) {
+    const msgs = WIN_MESSAGES[language];
+    const rowIdx = evaluations.length - 1;
+    return msgs[Math.min(rowIdx, msgs.length - 1)];
+  }
+  if (gameOver) return solution;
+  return '';
+}
+
 const TILE_EMOJIS: Record<string, string> = {
   correct: '\u{1F7E9}',
   present: '\u{1F7E8}',
@@ -307,6 +331,27 @@ export default function App() {
   const timerElapsed = useTimer(game.startedAt, game.solvedAt, showTimer);
   const { width } = useWindowDimensions();
   const isNarrow = width < 400;
+
+  const resultBannerMessage = useMemo(
+    () =>
+      resultMessageFromBoard(game.evaluations, game.gameOver, game.solution, language),
+    [game.evaluations, game.gameOver, game.solution, language],
+  );
+
+  const winRowIndex = game.gameWon && game.guesses.length > 0 ? game.guesses.length - 1 : -1;
+  const prevGameWonRef = useRef<boolean | null>(null);
+  const [winReplayNonce, setWinReplayNonce] = useState(0);
+
+  useEffect(() => {
+    if (prevGameWonRef.current === null) {
+      prevGameWonRef.current = game.gameWon;
+      return;
+    }
+    if (game.gameWon && !prevGameWonRef.current) {
+      setWinReplayNonce((n) => n + 1);
+    }
+    prevGameWonRef.current = game.gameWon;
+  }, [game.gameWon]);
 
   useWebSetup();
 
@@ -544,13 +589,14 @@ export default function App() {
         <SharedResultView data={sharedData} onClose={() => setSharedData(null)} />
       )}
 
-      {(game.message || shareToast) ? (
-        <View style={styles.messageBanner}>
-          <Text style={styles.messageText}>{shareToast || game.message}</Text>
-        </View>
-      ) : null}
-
       <View style={styles.content}>
+        {(resultBannerMessage || shareToast || game.message) ? (
+          <View style={styles.messageBanner}>
+            <Text style={styles.messageText}>
+              {shareToast || resultBannerMessage || game.message}
+            </Text>
+          </View>
+        ) : null}
         <Board
           guesses={game.guesses}
           evaluations={game.evaluations}
@@ -563,6 +609,10 @@ export default function App() {
           rows={game.rows}
           cols={game.cols}
           onSelectCell={game.selectCell}
+          pinGridTop={Boolean(resultBannerMessage || shareToast || game.message)}
+          gameWon={game.gameWon}
+          winRowIndex={winRowIndex}
+          winReplayNonce={winReplayNonce}
         />
 
         <View style={styles.bottom}>
