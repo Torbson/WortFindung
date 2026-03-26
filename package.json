@@ -5,8 +5,8 @@
   "scripts": {
     "start": "expo start",
     "web": "expo start --web",
-    "build:web": "expo export --platform web",
-    "deploy": "expo export --platform web"
+    "build:web": "expo export --platform web && node scripts/inject-og-meta.cjs",
+    "deploy": "expo export --platform web && node scripts/inject-og-meta.cjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",

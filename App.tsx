@@ -15,6 +15,7 @@ import { evaluateGuess, TileStatus } from './src/utils/gameLogic';
 import { COLORS, TEXT } from './src/styles/theme';
 import { styles } from './src/styles/styles';
 import { getWebGlobalCss, WEB_VIEWPORT_META } from './src/styles/web';
+import { applyShareMetaTags } from './src/utils/shareMeta';
 
 const WORD_LENGTHS: WordLength[] = [4, 5, 6, 7, 8];
 const LANGUAGES: { key: Language; label: string }[] = [
@@ -185,28 +186,24 @@ function resultMessageFromBoard(
   return '';
 }
 
-const TILE_EMOJIS: Record<string, string> = {
-  correct: '\u{1F7E9}',
-  present: '\u{1F7E8}',
-  absent: '\u{2B1B}',
-};
-
-function buildEmojiGrid(guesses: string[], solution: string): string {
-  return guesses.map(g => {
-    const eval_ = evaluateGuess(g, solution);
-    return eval_.map(s => TILE_EMOJIS[s] ?? '\u{2B1B}').join('');
-  }).join('\n');
-}
-
 async function shareOrCopy(url: string, text?: string) {
   if (Platform.OS !== 'web') return false;
-  const fullText = text ? `${text}\n${url}` : url;
   if (navigator.share) {
     try {
-      await navigator.share({ text: fullText });
+      if (!text?.trim()) {
+        const onlyUrl: ShareData = { url };
+        if (typeof navigator.canShare === 'function' && navigator.canShare(onlyUrl)) {
+          await navigator.share(onlyUrl);
+        } else {
+          await navigator.share({ text: url });
+        }
+        return true;
+      }
+      await navigator.share({ text: `${text}\n${url}`, url });
       return true;
     } catch { /* user cancelled or not supported */ }
   }
+  const fullText = text ? `${text}\n${url}` : url;
   try {
     await navigator.clipboard.writeText(fullText);
     return true;
@@ -380,25 +377,14 @@ function GamePlay({
       withGuesses ? game.durationSeconds : undefined,
     );
 
-    let text: string | undefined;
-    if (withGuesses && game.guesses.length > 0) {
-      const maxG = GAME_ROWS[wordLength];
-      const won = game.gameWon;
-      const score = won ? `${game.guesses.length}/${maxG}` : `X/${maxG}`;
-      const emoji = buildEmojiGrid(game.guesses, game.solution);
-      const dur = game.durationSeconds != null && game.durationSeconds > 0
-        ? ` · ${formatDuration(game.durationSeconds)}`
-        : '';
-      text = `WortFindung ${game.dateKey} · ${language.toUpperCase()} · ${wordLength}\n${score}${dur}\n\n${emoji}`;
-    }
-
-    const ok = await shareOrCopy(url, text);
+    /** Nur URL — kein Emoji-Raster im Text (sonst wirkt das in iMessage wie eine „Grafik“). */
+    const ok = await shareOrCopy(url);
     setShareOpen(false);
     if (ok) {
       setShareToast(language === 'de' ? 'Link kopiert!' : 'Link copied!');
       setTimeout(() => setShareToast(''), 2000);
     }
-  }, [language, wordLength, game.dateKey, game.guesses, game.gameWon, game.solution, game.durationSeconds, setShareOpen, setShareToast]);
+  }, [language, wordLength, game.dateKey, game.guesses, game.gameWon, game.durationSeconds, setShareOpen, setShareToast]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -564,6 +550,7 @@ export default function App() {
     if (urlParams.shared || urlParams.lang || urlParams.wordLength) {
       clearUrlParams();
     }
+    applyShareMetaTags();
   }, []);
 
   const toggleSettings = useCallback(() => {
