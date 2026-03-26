@@ -316,21 +316,39 @@ function SharedResultView({ data, onClose }: { data: SharedData; onClose: () => 
   );
 }
 
-export default function App() {
-  const urlParams = useMemo(() => parseUrlParams(), []);
-  const [language, setLanguage] = useState<Language>(urlParams.lang ?? 'de');
-  const [wordLength, setWordLength] = useState<WordLength>(urlParams.wordLength ?? 5);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareToast, setShareToast] = useState('');
-  const [sharedData, setSharedData] = useState<SharedData | null>(urlParams.shared ?? null);
-  const [showTimer, setShowTimer] = useState(() => loadSetting('wortfindung-timer', false));
-
-  const dateOverride = urlParams.date;
+/**
+ * Eigener Baum mit key=Sprache|Länge|Datum: `useWortFindung` setzt den Spielstand erst im useEffect zurück —
+ * ein Render mit **neuer** wordLength aber **altem** State mischt z.B. 5er-Zeilen mit cols=6 und kann crashen (weiße Seite).
+ */
+function GamePlay({
+  language,
+  wordLength,
+  dateOverride,
+  showTimer,
+  settingsOpen,
+  shareOpen,
+  setShareOpen,
+  sharedData,
+  setSharedData,
+  setSettingsOpen,
+  shareToast,
+  setShareToast,
+}: {
+  language: Language;
+  wordLength: WordLength;
+  dateOverride?: string;
+  showTimer: boolean;
+  settingsOpen: boolean;
+  shareOpen: boolean;
+  setShareOpen: (v: boolean | ((p: boolean) => boolean)) => void;
+  sharedData: SharedData | null;
+  setSharedData: (v: SharedData | null) => void;
+  setSettingsOpen: (v: boolean | ((p: boolean) => boolean)) => void;
+  shareToast: string;
+  setShareToast: (v: string) => void;
+}) {
   const game = useWortFindung(language, wordLength, dateOverride);
   const timerElapsed = useTimer(game.startedAt, game.solvedAt, showTimer);
-  const { width } = useWindowDimensions();
-  const isNarrow = width < 400;
 
   const resultBannerMessage = useMemo(
     () =>
@@ -352,32 +370,6 @@ export default function App() {
     }
     prevGameWonRef.current = game.gameWon;
   }, [game.gameWon]);
-
-  useWebSetup();
-
-  useEffect(() => {
-    if (urlParams.shared || urlParams.lang || urlParams.wordLength) {
-      clearUrlParams();
-    }
-  }, []);
-
-  const toggleSettings = useCallback(() => {
-    setSettingsOpen((prev) => !prev);
-    setShareOpen(false);
-  }, []);
-
-  const toggleTimer = useCallback(() => {
-    setShowTimer((prev) => {
-      const next = !prev;
-      saveSetting('wortfindung-timer', next);
-      return next;
-    });
-  }, []);
-
-  const toggleShare = useCallback(() => {
-    setShareOpen((prev) => !prev);
-    setSettingsOpen(false);
-  }, []);
 
   const handleShare = useCallback(async (withGuesses: boolean) => {
     const url = buildShareUrl(
@@ -406,7 +398,7 @@ export default function App() {
       setShareToast(language === 'de' ? 'Link kopiert!' : 'Link copied!');
       setTimeout(() => setShareToast(''), 2000);
     }
-  }, [language, wordLength, game.dateKey, game.guesses, game.gameWon, game.solution, game.durationSeconds]);
+  }, [language, wordLength, game.dateKey, game.guesses, game.gameWon, game.solution, game.durationSeconds, setShareOpen, setShareToast]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -448,7 +440,149 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [game.submitGuess, game.deleteLetter, game.addLetter, game.moveSelection, language, settingsOpen, shareOpen, sharedData]);
+  }, [game.submitGuess, game.deleteLetter, game.addLetter, game.moveSelection, language, settingsOpen, shareOpen, sharedData, setSettingsOpen, setShareOpen, setSharedData]);
+
+  return (
+    <>
+      {shareOpen && (
+        <Modal transparent animationType="fade" visible onRequestClose={() => setShareOpen(false)}>
+          <Pressable style={styles.overlay} onPress={() => setShareOpen(false)}>
+            <Pressable style={styles.settingsPanel} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.settingsTitle}>Teilen</Text>
+
+              <Text style={styles.shareDesc}>
+                {language === 'de'
+                  ? 'Link zum heutigen Rätsel — ohne Lösung'
+                  : 'Link to today\'s puzzle — no spoilers'}
+              </Text>
+              <Pressable
+                onPress={() => handleShare(false)}
+                style={({ pressed }) => [styles.shareOption, pressed && styles.shareOptionPressed]}
+              >
+                <SvgIcon svg={COPY_SVG} size={18} />
+                <Text style={styles.shareOptionTitle}>
+                  {language === 'de' ? 'Puzzle teilen' : 'Share puzzle'}
+                </Text>
+              </Pressable>
+
+              <Text style={[styles.shareDesc, !game.guesses.length && styles.shareDescDisabled]}>
+                {language === 'de'
+                  ? game.gameOver
+                    ? 'Link mit deiner Lösung und Dauer'
+                    : 'Link mit deinem bisherigen Stand'
+                  : game.gameOver
+                    ? 'Link with your solution and time'
+                    : 'Link with your progress so far'}
+              </Text>
+              <Pressable
+                onPress={() => handleShare(true)}
+                style={({ pressed }) => [
+                  styles.shareOption,
+                  !game.guesses.length && styles.shareOptionDisabled,
+                  pressed && !(!game.guesses.length) && styles.shareOptionPressed,
+                ]}
+                disabled={!game.guesses.length}
+              >
+                <SvgIcon svg={COPY_SVG} size={18} />
+                <Text style={[styles.shareOptionTitle, !game.guesses.length && styles.shareOptionDisabledText]}>
+                  {language === 'de' ? 'Ergebnis teilen' : 'Share result'}
+                </Text>
+              </Pressable>
+
+              <Pressable onPress={() => setShareOpen(false)} style={[styles.closeBtn, { marginTop: 16 }]}>
+                <Text style={styles.closeBtnText}>
+                  {language === 'de' ? 'Abbrechen' : 'Cancel'}
+                </Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      <View style={styles.content}>
+        {(resultBannerMessage || shareToast || game.message) ? (
+          <View style={styles.messageBanner}>
+            <Text style={styles.messageText}>
+              {shareToast || resultBannerMessage || game.message}
+            </Text>
+          </View>
+        ) : null}
+        <Board
+          guesses={game.guesses}
+          evaluations={game.evaluations}
+          currentGuess={game.currentGuess}
+          currentRow={game.currentRow}
+          selectedCell={game.selectedCell}
+          popCell={game.popCell}
+          shake={game.shake}
+          revealRow={game.revealRow}
+          rows={game.rows}
+          cols={game.cols}
+          onSelectCell={game.selectCell}
+          pinGridTop={Boolean(resultBannerMessage || shareToast || game.message)}
+          gameWon={game.gameWon}
+          winRowIndex={winRowIndex}
+          winReplayNonce={winReplayNonce}
+        />
+
+        <View style={styles.bottom}>
+          {showTimer && (
+            <View style={styles.timerRow}>
+              <Text style={styles.timerText}>{formatTimer(timerElapsed)}</Text>
+            </View>
+          )}
+          <Keyboard
+            onKeyPress={game.addLetter}
+            onEnter={game.submitGuess}
+            onDelete={game.deleteLetter}
+            letterStatuses={game.letterStatuses}
+            language={language}
+          />
+        </View>
+      </View>
+    </>
+  );
+}
+
+export default function App() {
+  const urlParams = useMemo(() => parseUrlParams(), []);
+  const [language, setLanguage] = useState<Language>(urlParams.lang ?? 'de');
+  const [wordLength, setWordLength] = useState<WordLength>(urlParams.wordLength ?? 5);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareToast, setShareToast] = useState('');
+  const [sharedData, setSharedData] = useState<SharedData | null>(urlParams.shared ?? null);
+  const [showTimer, setShowTimer] = useState(() => loadSetting('wortfindung-timer', false));
+
+  const dateOverride = urlParams.date;
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 400;
+
+  useWebSetup();
+
+  useEffect(() => {
+    if (urlParams.shared || urlParams.lang || urlParams.wordLength) {
+      clearUrlParams();
+    }
+  }, []);
+
+  const toggleSettings = useCallback(() => {
+    setSettingsOpen((prev) => !prev);
+    setShareOpen(false);
+  }, []);
+
+  const toggleTimer = useCallback(() => {
+    setShowTimer((prev) => {
+      const next = !prev;
+      saveSetting('wortfindung-timer', next);
+      return next;
+    });
+  }, []);
+
+  const toggleShare = useCallback(() => {
+    setShareOpen((prev) => !prev);
+    setSettingsOpen(false);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -530,106 +664,25 @@ export default function App() {
         </Modal>
       )}
 
-      {shareOpen && (
-        <Modal transparent animationType="fade" visible onRequestClose={toggleShare}>
-          <Pressable style={styles.overlay} onPress={toggleShare}>
-            <Pressable style={styles.settingsPanel} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.settingsTitle}>Teilen</Text>
-
-              <Text style={styles.shareDesc}>
-                {language === 'de'
-                  ? 'Link zum heutigen Rätsel — ohne Lösung'
-                  : 'Link to today\'s puzzle — no spoilers'}
-              </Text>
-              <Pressable
-                onPress={() => handleShare(false)}
-                style={({ pressed }) => [styles.shareOption, pressed && styles.shareOptionPressed]}
-              >
-                <SvgIcon svg={COPY_SVG} size={18} />
-                <Text style={styles.shareOptionTitle}>
-                  {language === 'de' ? 'Puzzle teilen' : 'Share puzzle'}
-                </Text>
-              </Pressable>
-
-              <Text style={[styles.shareDesc, !game.guesses.length && styles.shareDescDisabled]}>
-                {language === 'de'
-                  ? game.gameOver
-                    ? 'Link mit deiner Lösung und Dauer'
-                    : 'Link mit deinem bisherigen Stand'
-                  : game.gameOver
-                    ? 'Link with your solution and time'
-                    : 'Link with your progress so far'}
-              </Text>
-              <Pressable
-                onPress={() => handleShare(true)}
-                style={({ pressed }) => [
-                  styles.shareOption,
-                  !game.guesses.length && styles.shareOptionDisabled,
-                  pressed && !(!game.guesses.length) && styles.shareOptionPressed,
-                ]}
-                disabled={!game.guesses.length}
-              >
-                <SvgIcon svg={COPY_SVG} size={18} />
-                <Text style={[styles.shareOptionTitle, !game.guesses.length && styles.shareOptionDisabledText]}>
-                  {language === 'de' ? 'Ergebnis teilen' : 'Share result'}
-                </Text>
-              </Pressable>
-
-              <Pressable onPress={toggleShare} style={[styles.closeBtn, { marginTop: 16 }]}>
-                <Text style={styles.closeBtnText}>
-                  {language === 'de' ? 'Abbrechen' : 'Cancel'}
-                </Text>
-              </Pressable>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
-
       {sharedData && (
         <SharedResultView data={sharedData} onClose={() => setSharedData(null)} />
       )}
 
-      <View style={styles.content}>
-        {(resultBannerMessage || shareToast || game.message) ? (
-          <View style={styles.messageBanner}>
-            <Text style={styles.messageText}>
-              {shareToast || resultBannerMessage || game.message}
-            </Text>
-          </View>
-        ) : null}
-        <Board
-          guesses={game.guesses}
-          evaluations={game.evaluations}
-          currentGuess={game.currentGuess}
-          currentRow={game.currentRow}
-          selectedCell={game.selectedCell}
-          popCell={game.popCell}
-          shake={game.shake}
-          revealRow={game.revealRow}
-          rows={game.rows}
-          cols={game.cols}
-          onSelectCell={game.selectCell}
-          pinGridTop={Boolean(resultBannerMessage || shareToast || game.message)}
-          gameWon={game.gameWon}
-          winRowIndex={winRowIndex}
-          winReplayNonce={winReplayNonce}
-        />
-
-        <View style={styles.bottom}>
-          {showTimer && (
-            <View style={styles.timerRow}>
-              <Text style={styles.timerText}>{formatTimer(timerElapsed)}</Text>
-            </View>
-          )}
-          <Keyboard
-            onKeyPress={game.addLetter}
-            onEnter={game.submitGuess}
-            onDelete={game.deleteLetter}
-            letterStatuses={game.letterStatuses}
-            language={language}
-          />
-        </View>
-      </View>
+      <GamePlay
+        key={`${language}-${wordLength}-${dateOverride ?? ''}`}
+        language={language}
+        wordLength={wordLength}
+        dateOverride={dateOverride}
+        showTimer={showTimer}
+        settingsOpen={settingsOpen}
+        shareOpen={shareOpen}
+        setShareOpen={setShareOpen}
+        sharedData={sharedData}
+        setSharedData={setSharedData}
+        setSettingsOpen={setSettingsOpen}
+        shareToast={shareToast}
+        setShareToast={setShareToast}
+      />
     </View>
   );
 }

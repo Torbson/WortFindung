@@ -16,6 +16,14 @@ export const GAME_ROWS: Record<WordLength, number> = {
   8: 9,
 };
 
+/** Muss zu Tile.tsx / Board.tsx passen: Ende der Flip-Welle der letzten Kachel in der Zeile */
+const TILE_REVEAL_STAGGER_MS = 480;
+const TILE_REVEAL_DURATION_MS = 900;
+
+function rowRevealCompleteMs(cols: number): number {
+  return (cols - 1) * TILE_REVEAL_STAGGER_MS + TILE_REVEAL_DURATION_MS;
+}
+
 interface WortFindungState {
   solution: string;
   guesses: string[];
@@ -170,16 +178,31 @@ function createInitialState(lang: Language, wordLength: WordLength, dateOverride
 export function useWortFindung(language: Language, wordLength: WordLength, dateOverride?: string) {
   const [state, setState] = useState<WortFindungState>(() => createInitialState(language, wordLength, dateOverride));
   const messageTimer = useRef<ReturnType<typeof setTimeout>>();
+  /** Muss geleert werden bei Reset / neuer Zeile, sonst schreibt altes setState in den neuen Spielstand (z.B. nach Wortlängenwechsel). */
+  const keyboardRevealTimer = useRef<ReturnType<typeof setTimeout>>();
   const maxRows = GAME_ROWS[wordLength];
   const effectiveDateKey = dateOverride ?? getTodayDateKey();
 
   useEffect(() => {
+    if (keyboardRevealTimer.current) {
+      clearTimeout(keyboardRevealTimer.current);
+      keyboardRevealTimer.current = undefined;
+    }
     setState(createInitialState(language, wordLength, dateOverride));
   }, [language, wordLength, dateOverride]);
 
   useEffect(() => {
     saveState(language, wordLength, effectiveDateKey, state);
   }, [state, language, wordLength, effectiveDateKey]);
+
+  useEffect(() => {
+    return () => {
+      if (keyboardRevealTimer.current) {
+        clearTimeout(keyboardRevealTimer.current);
+        keyboardRevealTimer.current = undefined;
+      }
+    };
+  }, []);
 
   const flashMessage = useCallback((msg: string) => {
     if (messageTimer.current) clearTimeout(messageTimer.current);
@@ -288,6 +311,16 @@ export function useWortFindung(language: Language, wordLength: WordLength, dateO
       const startedAt = prev.startedAt ?? now;
       const solvedAt = gameOver ? now : null;
 
+      const delayKb = rowRevealCompleteMs(wordLength);
+      if (keyboardRevealTimer.current) {
+        clearTimeout(keyboardRevealTimer.current);
+        keyboardRevealTimer.current = undefined;
+      }
+      keyboardRevealTimer.current = setTimeout(() => {
+        keyboardRevealTimer.current = undefined;
+        setState((p) => ({ ...p, letterStatuses: newLetterStatuses }));
+      }, delayKb);
+
       return {
         ...prev,
         guesses: [...prev.guesses, guessStr],
@@ -298,7 +331,7 @@ export function useWortFindung(language: Language, wordLength: WordLength, dateO
         currentRow: prev.currentRow + 1,
         gameOver,
         gameWon: won,
-        letterStatuses: newLetterStatuses,
+        letterStatuses: prev.letterStatuses,
         shake: false,
         revealRow: prev.currentRow,
         startedAt,

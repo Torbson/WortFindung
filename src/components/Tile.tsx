@@ -57,6 +57,8 @@ export const Tile: React.FC<TileProps> = ({
   const popAnim = useRef(new Animated.Value(1)).current;
   const revealed = useRef(false);
   const [celebrationColor, setCelebrationColor] = useState<string | null>(null);
+  /** Nach Kantenmitte der Flip-Animation: z. B. Absent-Durchstreich (normales Spiel) */
+  const [revealFaceAtHalf, setRevealFaceAtHalf] = useState(false);
 
   const isBelowCelebration = winReplayRole === 'below';
 
@@ -193,29 +195,45 @@ export const Tile: React.FC<TileProps> = ({
 
   const isRevealed = status !== 'empty' && status !== 'tbd';
 
+  useEffect(() => {
+    if (!isRevealed || isBelowCelebration) {
+      setRevealFaceAtHalf(false);
+      return;
+    }
+    let prevHalf = false;
+    const id = flipAnim.addListener(({ value }) => {
+      const atHalf = value >= 0.5;
+      if (atHalf === prevHalf) return;
+      prevHalf = atHalf;
+      setRevealFaceAtHalf(atHalf);
+    });
+    return () => flipAnim.removeListener(id);
+  }, [isRevealed, isBelowCelebration, flipAnim]);
+
   /** Horizontal um die Y-Achse; Welle von links nach rechts über gestaffeltes `delay` im Board */
   const rotateY = flipAnim.interpolate({
     inputRange: [0, 0.5, 1],
     outputRange: ['0deg', '90deg', '0deg'],
   });
 
+  const baseBorder = selected ? '#787878' : COLORS.tileBorder;
+  const resultFill = isRevealed ? STATUS_COLORS[status] : 'transparent';
+
   const bgColor = flipAnim.interpolate({
     inputRange: [0, 0.49, 0.5, 1],
-    outputRange: [
-      'transparent',
-      'transparent',
-      STATUS_COLORS[status] || 'transparent',
-      STATUS_COLORS[status] || 'transparent',
-    ],
+    outputRange: ['transparent', 'transparent', resultFill, resultFill],
   });
 
-  const borderColor = selected
-    ? '#787878'
-    : isBelowCelebration && celebrationColor
-      ? celebrationColor
-      : isRevealed
-        ? STATUS_COLORS[status]
-        : COLORS.tileBorder;
+  const borderColorAnim = flipAnim.interpolate({
+    inputRange: [0, 0.49, 0.5, 1],
+    outputRange: [baseBorder, baseBorder, resultFill, resultFill],
+  });
+
+  const borderColor = isBelowCelebration && celebrationColor
+    ? celebrationColor
+    : isRevealed
+      ? (borderColorAnim as any)
+      : baseBorder;
 
   const bgSolid = isBelowCelebration && celebrationColor ? celebrationColor : undefined;
 
@@ -250,7 +268,7 @@ export const Tile: React.FC<TileProps> = ({
         style={[
           styles.letter,
           { fontSize },
-          isRevealed && status === 'absent' && styles.letterAbsent,
+          isRevealed && status === 'absent' && revealFaceAtHalf && styles.letterAbsent,
         ]}
       >
         {letter}
